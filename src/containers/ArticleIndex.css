@@ -2,3 +2,8 @@
 	margin: 0 auto;
 	max-width: 750px;
 }
+
+.load-more-container{
+	margin: 20px auto;
+    text-align: center;
+}

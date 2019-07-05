@@ -6,8 +6,13 @@ import CachingService from '../services/CachingService';
 import LoadingComponent from '../components/common/LoadingComponent';
 import ErrorComponent from '../components/common/ErrorComonent';
 import { RouteComponentProps, withRouter } from 'react-router-dom';
+import { Button } from '@material-ui/core';
+import CircularProgress from '@material-ui/core/CircularProgress';
 
 type State = {
+	loading: boolean,
+	page: number,
+	perPage: number,
 	list: any[],
 	err: any
 }
@@ -24,6 +29,9 @@ class ArticleIndex extends React.Component <RouteComponentProps<{tag?: string}>>
 		this.cache = new CachingService
 
 		this.state = {
+			loading: false,
+			page: 0,
+			perPage: 5,
 			list: [],
 			err: ''
 		}
@@ -36,61 +44,72 @@ class ArticleIndex extends React.Component <RouteComponentProps<{tag?: string}>>
     }
 
 	componentDidMount() {
-		this.getArticles(this.props.match.params.tag || null);
+		this.getArticles(this.props.match.params.tag || null, 0);
 	}
 
-	async getArticles(tag: string|null) {
+	getArticles = async (tag: string|null, page: number = 0) => {
+		this.setState({ loading: true });
 
-		this.setState({ list: [] })
-
-		const cacheKey = tag ? `tag-${tag}` : 'index';
-
-		const cachedDocuments = this.cache.getDocument(cacheKey)
-
-		if (cachedDocuments) {
-			this.setState({ list: cachedDocuments })
-		}		
+		if (page == 0) {
+			this.setState({ list: [] })
+		}	
 		
 		(tag
-			? this.api.getArticlesByTag(tag)
-			: this.api.getAllArticles()
+			? this.api.getArticlesByTag(tag, (this.state.perPage * page), this.state.perPage)
+			: this.api.getAllArticles((this.state.perPage * page), this.state.perPage)
 		)
 		.then((articles: any) => {
-			articles = articles.sort((a: any, b: any) => {
-				return b.unixTime - a.unixTime
-			})
-			if (articles.tx_status && articles.tx.status.status !== 200) {
-				throw (articles.tx_status.status)
-			}
-			this.setState({ list: articles })
-			this.cache.setDocument(cacheKey, articles)
+			this.setState({
+				list: this.state.list.concat(articles),
+				loading: false
+			});
 		}).catch((err: any) => {
-			this.setState({ err })
+			this.setState({ err , loading: false});
 		})
 	}
 
-	render() {
-		const { list, err } = this.state;
+	loadMore = async () => {
+		this.setState({page: this.state.page + 1}, () => {
+			this.getArticles(this.props.match.params.tag || null, this.state.page);
+		})
+	}
 
-		const exploreTag = (tag: string) => {
-			this.props.history.push(`/explore/${tag}`);
-		};
+	exploreTag = (tag: string) => {
+		this.props.history.push(`/explore/${tag}`);
+	};
+
+	render() {
+		const { list, err, loading } = this.state;
 
 		return (
 			list.length ?
-				list.map((article: any) => {
-					return (
-						<div
-							key={article.id}
-							className='list-card'
+				(<>
+					{list.map((article: any) => {
+						return (
+							<div
+								key={article.id}
+								className='list-card'
+							>
+								<ArticleListCard
+									article={article}
+									onTagClick={this.exploreTag}
+								/>
+							</div>
+						)
+					})}
+					<div className="load-more-container">
+
+						{loading ? <CircularProgress color="inherit" />: 
+						<Button
+							variant="outlined"
+							onClick={this.loadMore}
+							style={{margin: '0 auto'}}
 						>
-							<ArticleListCard
-								article={article}
-								onTagClick={exploreTag}
-							/>
-						</div>
-					)
-				})
+							Load more
+						</Button>}
+					</div>
+					</>
+				)
 				:
 				err.message ?
 					<ErrorComponent message={err.message}/>
